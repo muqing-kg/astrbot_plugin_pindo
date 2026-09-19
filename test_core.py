@@ -480,6 +480,51 @@ def test_interaction_logic() -> None:
             del sys.modules[k]
 
 
+def test_webui_title_rewrite() -> None:
+    """SiteServer 标题替换：html/manifest 生效、资源不动、未配置保持默认。"""
+    print("[9] WebUI 标题自定义替换")
+    import asyncio
+    import aiohttp
+    from web_server import DEFAULT_SITE_TITLE as DEFAULT_TITLE, SiteServer
+
+    pinv = Path(__file__).resolve().parent
+    webui = pinv / "webui"
+    asset_rel = next(p.relative_to(webui).as_posix() for p in sorted((webui / "_next").rglob("*.js")))
+
+    async def fetch(session: "aiohttp.ClientSession", url: str) -> str:
+        async with session.get(url) as resp:
+            return await resp.text()
+
+    async def run() -> None:
+        custom = "沐倾的拼豆小站"
+        s = SiteServer(webui, host="127.0.0.1", port=8791, site_title=custom)
+        await s.start()
+        try:
+            async with aiohttp.ClientSession() as http:
+                index = await fetch(http, "http://127.0.0.1:8791/")
+                check("首页 h1/标题替换", custom in index and DEFAULT_TITLE not in index)
+                manifest = await fetch(http, "http://127.0.0.1:8791/manifest.json")
+                check("manifest 名称替换", custom in manifest)
+                focus = await fetch(http, "http://127.0.0.1:8791/focus")
+                check("专注页标题替换", custom in focus)
+                async with aiohttp.ClientSession() as http2:
+                    async with http2.get(f"http://127.0.0.1:8791/{asset_rel}") as resp:
+                        check("静态资源不受影响", resp.status == 200)
+        finally:
+            await s.stop()
+
+        s2 = SiteServer(webui, host="127.0.0.1", port=8792)
+        await s2.start()
+        try:
+            async with aiohttp.ClientSession() as http:
+                index = await fetch(http, "http://127.0.0.1:8792/")
+                check("未配置时保持默认标题", DEFAULT_TITLE in index)
+        finally:
+            await s2.stop()
+
+    asyncio.run(run())
+
+
 def main() -> int:
     test_brand_and_command()
     test_downscale()
@@ -489,6 +534,7 @@ def main() -> int:
     test_palette_limit()
     test_palettes()
     test_interaction_logic()
+    test_webui_title_rewrite()
     print(f"\n结果: {PASS} 通过, {FAIL} 失败")
     return 1 if FAIL else 0
 

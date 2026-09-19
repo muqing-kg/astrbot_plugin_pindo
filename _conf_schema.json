@@ -42,6 +42,12 @@
     "default": 8765,
     "hint": "独立于 AstrBot 面板（6185）；公网访问需在防火墙/安全组放行该端口"
   },
+  "site_title": {
+    "description": "网站标题",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用默认标题「Pindo 拼豆图纸生成器」；修改后需重载插件"
+  },
   "site_url": {
     "description": "外部访问网站地址",
     "type": "string",

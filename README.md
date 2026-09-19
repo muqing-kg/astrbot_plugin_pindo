@@ -37,6 +37,7 @@
 | `max_long_edge` | `120` | 图纸最长边颗数上限 |
 | `enable_site` | `true` | 是否启用内置 WebUI |
 | `site_host` / `site_port` | `0.0.0.0` / `8765` | WebUI 监听地址与端口 |
+| `site_title` | 空 | 网站标题（页签与页面大标题），留空用默认「Pindo 拼豆图纸生成器」 |
 | `site_url` | 空 | WebUI 外部访问地址；供附带文字的 `{url}` 占位符替换 |
 | `send_site_hint` | `false` | 出图时附带下方自定义文字（渲染后为空则不发送） |
 | `site_hint_text` | `完整功能请前往 {url}` | 出图附带文字模板，`{url}` 替换为外部访问地址，不含占位符则原样发送 |
