@@ -259,6 +259,64 @@ def test_palettes() -> None:
         check(f"{BRAND_LABELS[brand]} {len(pal)} 色结构完整", ok)
 
 
+def test_interaction_logic() -> None:
+    """收图交互决策：图片 > 引用图 > @头像；@ 头像仅在无图时兜底。"""
+    print("[8] 收图交互决策（main.py 包式加载）")
+    import types
+    import logging
+    import importlib
+
+    pkg = types.ModuleType('astrbot'); pkg.__path__ = []
+    api = types.ModuleType('astrbot.api'); api.logger = logging.getLogger('t')
+    api.AstrBotConfig = type('AstrBotConfig', (dict,), {})
+    event_m = types.ModuleType('astrbot.api.event'); event_m.AstrMessageEvent = object
+    event_m.filter = types.SimpleNamespace(
+        regex=lambda *a, **k: (lambda f: f),
+        event_message_type=lambda *a, **k: (lambda f: f),
+        EventMessageType=types.SimpleNamespace(ALL=1))
+    star = types.ModuleType('astrbot.api.star'); star.Context = object; star.Star = object
+    comp = types.ModuleType('astrbot.api.message_components')
+
+    class Image:
+        pass
+
+    class Reply:
+        def __init__(self, chain=None):
+            self.chain = chain or []
+
+    class At:
+        def __init__(self, qq):
+            self.qq = qq
+
+    comp.Image, comp.Reply, comp.At = Image, Reply, At
+    sys.modules.update({'astrbot': pkg, 'astrbot.api': api, 'astrbot.api.event': event_m,
+                        'astrbot.api.star': star, 'astrbot.api.message_components': comp})
+    parent = str(Path(__file__).resolve().parent.parent)
+    sys.path.insert(0, parent)
+    try:
+        mod = importlib.import_module('astrbot_plugin_pindo.main')
+        P = mod.PindoPlugin
+        img, at = Image(), At('114514')
+
+        ev = types.SimpleNamespace(get_messages=lambda: [at, img])
+        check("@+图片同存时图片优先", P._extract_first_image(ev) is img)
+        ev2 = types.SimpleNamespace(get_messages=lambda: [at])
+        check("仅 @ 时无图片可取（走头像兜底）", P._extract_first_image(ev2) is None)
+        check("@ 提取被 @ 者 QQ", P._extract_at_qq(ev) == '114514')
+        ev3 = types.SimpleNamespace(get_messages=lambda: [Image()])
+        check("有图无 @ 时不读头像", P._extract_at_qq(ev3) is None)
+        ev4 = types.SimpleNamespace(get_messages=lambda: [Reply([Image()])])
+        check("引用链内图片可取", P._extract_first_image(ev4) is not None)
+        ev5 = types.SimpleNamespace(get_messages=lambda: [Reply([At('1919')])])
+        check("@ 藏在引用链内不算（顶层为准）", P._extract_at_qq(ev5) is None)
+        g = mod.COMMAND_RE.match('拼豆品牌方')
+        check("品牌方参数归位", (g.group(1) or g.group(2)) == '品牌方')
+    finally:
+        sys.path.remove(parent)
+        for k in [k for k in sys.modules if k.startswith('astrbot_plugin_pindo')]:
+            del sys.modules[k]
+
+
 def main() -> int:
     test_brand_and_command()
     test_downscale()
@@ -267,6 +325,7 @@ def main() -> int:
     test_render()
     test_palette_limit()
     test_palettes()
+    test_interaction_logic()
     print(f"\n结果: {PASS} 通过, {FAIL} 失败")
     return 1 if FAIL else 0
 
