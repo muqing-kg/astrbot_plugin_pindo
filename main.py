@@ -53,7 +53,8 @@ class PindoPlugin(Star):
         self.wait_timeout = int(config.get("wait_timeout", 30))
         self.max_long_edge = int(config.get("max_long_edge", 120))
         self.site_url = str(config.get("site_url", "")).strip()
-        self.send_site_hint = bool(config.get("send_site_hint", True))
+        self.send_site_hint = bool(config.get("send_site_hint", False))
+        self.site_hint_text = str(config.get("site_hint_text", "完整功能请前往 {url}"))
         self._pending: dict[tuple[str, str], tuple[asyncio.TimerHandle, str]] = {}
         self._site: SiteServer | None = None
 
@@ -236,6 +237,8 @@ class PindoPlugin(Star):
             return
 
         chain = MessageChain().file_image(str(out_path))
-        if self.send_site_hint and self.site_url:
-            chain = chain.message(f"完整功能请前往 {self.site_url}")
+        if self.send_site_hint:
+            hint = self.site_hint_text.replace("{url}", self.site_url).strip()
+            if hint:
+                chain = chain.message(hint)
         await event.send(chain)

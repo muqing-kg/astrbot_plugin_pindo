@@ -378,8 +378,8 @@ def test_interaction_logic() -> None:
             check('出图后 stop_event', ev2.stopped)
             check('未配置网站地址时不发提示', [k for k, _ in ev2.sent[0]] == ['file'])
 
-            # 2b. 配置网站地址 + 开关开 → 图与提示同一条消息，图在前
-            p2b = P(object(), {'site_url': 'http://1.2.3.4:8765'})
+            # 2b. 开关开 → 图与提示同一条消息，图在前；{url} 替换为网站地址
+            p2b = P(object(), {'site_url': 'http://1.2.3.4:8765', 'send_site_hint': True})
             ev2b = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
             await p2b.pindou(ev2b)
             s0 = ev2b.sent[0] if ev2b.sent else []
@@ -387,11 +387,34 @@ def test_interaction_logic() -> None:
                   and s0[0][0] == 'file' and s0[1] == ('text', '完整功能请前往 http://1.2.3.4:8765'),
                   f'got {ev2b.sent}')
 
-            # 2c. 开关关 → 单条消息只发图
-            p2c = P(object(), {'site_url': 'http://1.2.3.4:8765', 'send_site_hint': False})
+            # 2c. 开关关（新默认） → 单条消息只发图
+            p2c = P(object(), {'site_url': 'http://1.2.3.4:8765'})
             ev2c = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
             await p2c.pindou(ev2c)
-            check('开关关闭时只发图', len(ev2c.sent) == 1 and [k for k, _ in ev2c.sent[0]] == ['file'])
+            check('开关默认关闭时只发图', len(ev2c.sent) == 1 and [k for k, _ in ev2c.sent[0]] == ['file'])
+
+            # 2d. 自定义模板：{url} 占位符 / 无占位符 / 渲染后为空
+            p2d = P(object(), {'send_site_hint': True, 'site_url': 'http://x:8765',
+                               'site_hint_text': '拼豆完整版在 {url} 哦'})
+            ev2d = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2d.pindou(ev2d)
+            check('自定义模板替换 {url}', ev2d.sent[0][-1] == ('text', '拼豆完整版在 http://x:8765 哦'))
+            p2e = P(object(), {'send_site_hint': True, 'site_hint_text': '纯文字没有占位符'})
+            ev2e = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2e.pindou(ev2e)
+            check('无占位符原样发送', ev2e.sent[0][-1] == ('text', '纯文字没有占位符'))
+            p2f = P(object(), {'send_site_hint': True, 'site_hint_text': '  '})
+            ev2f = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2f.pindou(ev2f)
+            check('渲染后为空不附加', [k for k, _ in ev2f.sent[0]] == ['file'])
+
+            # 2g. 默认品牌用显示名（含中文），旧小写 id 兼容
+            p2g = P(object(), {'default_brand': '漫漫'})
+            check('显示名 漫漫 → manman', p2g._default_brand() == 'manman')
+            p2h = P(object(), {'default_brand': 'Artkal S'})
+            check('显示名 Artkal S → artkal-s', p2h._default_brand() == 'artkal-s')
+            p2i = P(object(), {'default_brand': 'mard'})
+            check('旧小写 id 仍兼容', p2i._default_brand() == 'mard')
 
             # 3. @ + 图片同存 → 图片优先，头像不参与
             p3 = P(object(), {})

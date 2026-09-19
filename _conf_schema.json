@@ -2,8 +2,8 @@
   "default_brand": {
     "description": "默认品牌色板",
     "type": "string",
-    "options": ["mard", "coco", "manman", "panpan", "mixiaowo", "hama", "perler", "artkal-s"],
-    "default": "mard",
+    "options": ["MARD", "COCO", "漫漫", "盼盼", "咪小窝", "Hama", "Perler", "Artkal S"],
+    "default": "MARD",
     "hint": "「拼豆」不带品牌参数时使用的色板"
   },
   "robot_watermark": {
@@ -51,7 +51,13 @@
   "send_site_hint": {
     "description": "出图时附带网站提示",
     "type": "bool",
-    "default": true,
-    "hint": "开启后出图会附带「完整功能请前往 …」一条文字；上方地址为空时不发送"
+    "default": false,
+    "hint": "开启后出图会附带下方自定义文字（渲染后为空则不发送）"
+  },
+  "site_hint_text": {
+    "description": "出图附带文字模板",
+    "type": "string",
+    "default": "完整功能请前往 {url}",
+    "hint": "占位符 {url} 会替换为上方「外部访问网站地址」；不含占位符则原样发送；渲染后为空则不发送"
   }
 }

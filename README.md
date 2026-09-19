@@ -31,14 +31,15 @@
 
 | 配置 | 默认 | 说明 |
 | --- | --- | --- |
-| `default_brand` | `mard` | 默认品牌色板 |
+| `default_brand` | `MARD` | 默认品牌色板（显示名：MARD/COCO/漫漫/盼盼/咪小窝/Hama/Perler/Artkal S） |
 | `robot_watermark` | 空 | 图纸底部信息条的机器人名，留空不显示 |
 | `wait_timeout` | `30` | 补图等待秒数，超时静默 |
 | `max_long_edge` | `120` | 图纸最长边颗数上限 |
 | `enable_site` | `true` | 是否启用内置 WebUI |
 | `site_host` / `site_port` | `0.0.0.0` / `8765` | WebUI 监听地址与端口 |
-| `site_url` | 空 | WebUI 外部访问地址；出图提示使用 |
-| `send_site_hint` | `true` | 出图时附带「完整功能请前往 …」文字（地址为空则不发送） |
+| `site_url` | 空 | WebUI 外部访问地址；供附带文字的 `{url}` 占位符替换 |
+| `send_site_hint` | `false` | 出图时附带下方自定义文字（渲染后为空则不发送） |
+| `site_hint_text` | `完整功能请前往 {url}` | 出图附带文字模板，`{url}` 替换为外部访问地址，不含占位符则原样发送 |
 
 ## 开发自检
 
