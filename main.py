@@ -67,6 +67,7 @@ class PindoPlugin(Star):
                     host=str(self.config.get("site_host", "0.0.0.0")),
                     port=int(self.config.get("site_port", 8765)),
                     site_title=str(self.config.get("site_title", "")),
+                    site_logo=str(self.config.get("site_logo", "")),
                 )
                 await self._site.start()
             except Exception as e:

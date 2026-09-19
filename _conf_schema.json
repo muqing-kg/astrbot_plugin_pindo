@@ -48,6 +48,12 @@
     "default": "",
     "hint": "留空使用默认标题「Pindo 拼豆图纸生成器」；修改后需重载插件"
   },
+  "site_logo": {
+    "description": "自定义网站 Logo 图片链接",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用内置插件图标；填写图片 URL 后替换页签 favicon 与标题旁图标，修改后需重载插件"
+  },
   "site_url": {
     "description": "外部访问网站地址",
     "type": "string",

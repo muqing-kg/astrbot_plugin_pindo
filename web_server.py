@@ -33,11 +33,12 @@ class SiteServer:
     """托管插件内置的 Pindo 静态站点。"""
 
     def __init__(self, static_dir: str | Path, host: str = "0.0.0.0", port: int = 8765,
-                 site_title: str = ""):
+                 site_title: str = "", site_logo: str = ""):
         self.static_dir = Path(static_dir).resolve()
         self.host = host
         self.port = port
         self.site_title = site_title.strip()
+        self.site_logo = site_logo.strip()
         self.runner: web.AppRunner | None = None
         self.app = web.Application()
         self._setup_routes()
@@ -45,11 +46,13 @@ class SiteServer:
     # ---------------------------------------------------------- 响应构造
 
     def _serve_file(self, file: Path) -> web.Response:
-        """读取文件；配置了自定义标题时替换默认标题后返回。"""
+        """读取文件；配置了自定义标题/Logo 时替换占位符后返回。"""
         data = file.read_bytes()
         if self.site_title and self.site_title != DEFAULT_SITE_TITLE:
             data = data.replace(DEFAULT_SITE_TITLE.encode("utf-8"),
                                 self.site_title.encode("utf-8"))
+        logo_url = (self.site_logo or "/logo.png").replace('"', "%22").replace("<", "%3C").replace(">", "%3E")
+        data = data.replace(b"__SITE_LOGO__", logo_url.encode("utf-8"))
         ctype, _enc = mimetypes.guess_type(str(file))
         if ctype is None:
             ctype = "application/octet-stream"

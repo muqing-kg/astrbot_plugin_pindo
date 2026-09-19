@@ -481,8 +481,8 @@ def test_interaction_logic() -> None:
 
 
 def test_webui_title_rewrite() -> None:
-    """SiteServer 标题替换：html/manifest/JS bundle 生效、二进制不动、未配置保持默认。"""
-    print("[9] WebUI 标题自定义替换（含 JS bundle hydration 源）")
+    """SiteServer 标题/Logo 替换：html/manifest/JS bundle 生效、二进制不动、未配置用内置。"""
+    print("[9] WebUI 标题与 Logo 自定义替换")
     import asyncio
     import aiohttp
     from web_server import DEFAULT_SITE_TITLE as DEFAULT_TITLE, SiteServer
@@ -491,6 +491,8 @@ def test_webui_title_rewrite() -> None:
     webui = pinv / "webui"
     title_chunk_rel = next(p.relative_to(webui).as_posix() for p in sorted((webui / "_next").rglob("*.js"))
                            if DEFAULT_TITLE.encode() in p.read_bytes())
+    logo_chunk_rel = next(p.relative_to(webui).as_posix() for p in sorted((webui / "_next").rglob("*.js"))
+                          if b"__SITE_LOGO__" in p.read_bytes())
     png_rel = next(p.relative_to(webui).as_posix() for p in sorted(webui.rglob("*.png")))
     png_bytes = (webui / png_rel).read_bytes()
 
@@ -500,12 +502,17 @@ def test_webui_title_rewrite() -> None:
 
     async def run() -> None:
         custom = "沐倾的拼豆小站"
-        s = SiteServer(webui, host="127.0.0.1", port=8791, site_title=custom)
+        s = SiteServer(webui, host="127.0.0.1", port=8791, site_title=custom,
+                       site_logo="https://example.com/my-logo.png")
         await s.start()
         try:
             async with aiohttp.ClientSession() as http:
                 index = await fetch(http, "http://127.0.0.1:8791/")
-                check("首页 h1/标题替换", custom in index and DEFAULT_TITLE not in index)
+                check("首页标题替换", custom in index and DEFAULT_TITLE not in index)
+                check("首页 Logo 替换为自定义链接",
+                      'href="https://example.com/my-logo.png"' in index
+                      and 'src="https://example.com/my-logo.png"' in index
+                      and "__SITE_LOGO__" not in index)
                 manifest = await fetch(http, "http://127.0.0.1:8791/manifest.json")
                 check("manifest 名称替换", custom in manifest)
                 focus = await fetch(http, "http://127.0.0.1:8791/focus")
@@ -513,6 +520,9 @@ def test_webui_title_rewrite() -> None:
                 chunk = await fetch(http, f"http://127.0.0.1:8791/{title_chunk_rel}")
                 check("JS bundle 内标题替换（hydration 源）",
                       custom in chunk and DEFAULT_TITLE not in chunk)
+                logo_chunk = await fetch(http, f"http://127.0.0.1:8791/{logo_chunk_rel}")
+                check("JS bundle 内 Logo 占位符替换",
+                      "https://example.com/my-logo.png" in logo_chunk and "__SITE_LOGO__" not in logo_chunk)
                 async with aiohttp.ClientSession() as http2:
                     async with http2.get(f"http://127.0.0.1:8791/{png_rel}") as resp:
                         body = await resp.read()
@@ -527,6 +537,13 @@ def test_webui_title_rewrite() -> None:
             async with aiohttp.ClientSession() as http:
                 index = await fetch(http, "http://127.0.0.1:8792/")
                 check("未配置时保持默认标题", DEFAULT_TITLE in index)
+                check("未配置 Logo 时用内置 /logo.png",
+                      'href="/logo.png"' in index and 'src="/logo.png"' in index
+                      and "__SITE_LOGO__" not in index)
+                async with http.get("http://127.0.0.1:8792/logo.png") as resp:
+                    body = await resp.read()
+                    check("内置 logo.png 可访问", resp.status == 200
+                          and resp.content_type == "image/png" and len(body) > 0)
         finally:
             await s2.stop()
 
