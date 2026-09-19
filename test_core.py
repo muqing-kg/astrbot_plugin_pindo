@@ -481,15 +481,18 @@ def test_interaction_logic() -> None:
 
 
 def test_webui_title_rewrite() -> None:
-    """SiteServer 标题替换：html/manifest 生效、资源不动、未配置保持默认。"""
-    print("[9] WebUI 标题自定义替换")
+    """SiteServer 标题替换：html/manifest/JS bundle 生效、二进制不动、未配置保持默认。"""
+    print("[9] WebUI 标题自定义替换（含 JS bundle hydration 源）")
     import asyncio
     import aiohttp
     from web_server import DEFAULT_SITE_TITLE as DEFAULT_TITLE, SiteServer
 
     pinv = Path(__file__).resolve().parent
     webui = pinv / "webui"
-    asset_rel = next(p.relative_to(webui).as_posix() for p in sorted((webui / "_next").rglob("*.js")))
+    title_chunk_rel = next(p.relative_to(webui).as_posix() for p in sorted((webui / "_next").rglob("*.js"))
+                           if DEFAULT_TITLE.encode() in p.read_bytes())
+    png_rel = next(p.relative_to(webui).as_posix() for p in sorted(webui.rglob("*.png")))
+    png_bytes = (webui / png_rel).read_bytes()
 
     async def fetch(session: "aiohttp.ClientSession", url: str) -> str:
         async with session.get(url) as resp:
@@ -507,9 +510,14 @@ def test_webui_title_rewrite() -> None:
                 check("manifest 名称替换", custom in manifest)
                 focus = await fetch(http, "http://127.0.0.1:8791/focus")
                 check("专注页标题替换", custom in focus)
+                chunk = await fetch(http, f"http://127.0.0.1:8791/{title_chunk_rel}")
+                check("JS bundle 内标题替换（hydration 源）",
+                      custom in chunk and DEFAULT_TITLE not in chunk)
                 async with aiohttp.ClientSession() as http2:
-                    async with http2.get(f"http://127.0.0.1:8791/{asset_rel}") as resp:
-                        check("静态资源不受影响", resp.status == 200)
+                    async with http2.get(f"http://127.0.0.1:8791/{png_rel}") as resp:
+                        body = await resp.read()
+                        check("二进制资源字节不变",
+                              resp.status == 200 and resp.content_type == "image/png" and body == png_bytes)
         finally:
             await s.stop()
 

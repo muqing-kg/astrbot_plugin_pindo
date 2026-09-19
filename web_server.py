@@ -4,13 +4,15 @@
 AppRunner + TCPSite，端口占用重试，任何异常不向上抛、不拖垮插件主功能。
 aiohttp 是 AstrBot 框架自带依赖，无需在 requirements.txt 声明。
 
-支持站点标题自定义：html 与 manifest.json 在分发时把默认标题替换为
-配置值（其余资源原样直出，路径穿越由解析后前缀校验拦截）。
+支持站点标题自定义：所有文本资源（html/js/json/txt…）分发时把默认标题
+替换为配置值——必须连客户端 JS bundle 一起替换，否则 React 19 hydration
+会用打包内硬编码标题把 DOM 改回去。二进制文件不含该模式串，替换零开销。
 """
 from __future__ import annotations
 
 import asyncio
 import errno
+import mimetypes
 from pathlib import Path
 
 from aiohttp import web
@@ -42,14 +44,22 @@ class SiteServer:
 
     # ---------------------------------------------------------- 响应构造
 
-    def _rewritten(self, file: Path) -> web.Response:
+    def _serve_file(self, file: Path) -> web.Response:
         """读取文件；配置了自定义标题时替换默认标题后返回。"""
         data = file.read_bytes()
         if self.site_title and self.site_title != DEFAULT_SITE_TITLE:
             data = data.replace(DEFAULT_SITE_TITLE.encode("utf-8"),
                                 self.site_title.encode("utf-8"))
-        ctype = "text/html" if file.suffix == ".html" else "application/manifest+json"
-        return web.Response(body=data, content_type=ctype, charset="utf-8")
+        ctype, _enc = mimetypes.guess_type(str(file))
+        if ctype is None:
+            ctype = "application/octet-stream"
+        if ctype == "application/json" and file.name == "manifest.json":
+            ctype = "application/manifest+json"
+        if ctype.startswith("text/") or ctype in (
+            "application/javascript", "application/json", "application/manifest+json",
+        ):
+            return web.Response(body=data, content_type=ctype, charset="utf-8")
+        return web.Response(body=data, content_type=ctype)
 
     def _safe_static_file(self, rel: str) -> Path | None:
         target = (self.static_dir / rel.lstrip("/")).resolve()
@@ -68,40 +78,31 @@ class SiteServer:
                 return await handler(request)
             except web.HTTPNotFound:
                 if not_found.exists():
-                    return self._rewritten(not_found)
+                    return self._serve_file(not_found)
                 raise
 
         async def serve_index(_request: web.Request) -> web.Response:
             index = self.static_dir / "index.html"
             if index.exists():
-                return self._rewritten(index)
+                return self._serve_file(index)
             return web.Response(status=404, text="Pindo 静态资源缺失，请重新安装插件")
 
         async def serve_focus(_request: web.Request) -> web.Response:
             focus_index = self.static_dir / "focus" / "index.html"
             if focus_index.exists():
-                return self._rewritten(focus_index)
+                return self._serve_file(focus_index)
             raise web.HTTPNotFound
 
-        async def serve_manifest(_request: web.Request) -> web.Response:
-            manifest = self.static_dir / "manifest.json"
-            if manifest.exists():
-                return self._rewritten(manifest)
-            raise web.HTTPNotFound
-
-        async def serve_html(request: web.Request) -> web.Response:
+        async def serve_file(request: web.Request) -> web.Response:
             target = self._safe_static_file(request.match_info.get("path", ""))
             if target is None:
                 raise web.HTTPNotFound
-            return self._rewritten(target)
+            return self._serve_file(target)
 
         self.app.middlewares.append(not_found_middleware)
         self.app.router.add_get("/", serve_index)
         self.app.router.add_get("/focus", serve_focus)
-        self.app.router.add_get("/manifest.json", serve_manifest)
-        self.app.router.add_get(r"/{path:.*\.html}", serve_html)
-        if self.static_dir.is_dir():
-            self.app.router.add_static("/", path=str(self.static_dir), show_index=False)
+        self.app.router.add_get(r"/{path:.*}", serve_file)
 
     # ---------------------------------------------------------- 生命周期
 
