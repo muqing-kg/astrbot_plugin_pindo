@@ -73,6 +73,14 @@ def test_brand_and_command() -> None:
                      ("拼豆品牌方", True), ("拼豆 品牌方", True), (" 拼豆 mard ", True),
                      ("拼豆真好玩", False), ("一起来拼豆", False), ("拼豆mard", False)]:
         check(f"正则 {text!r} → {ok}", bool(COMMAND_RE.match(text)) == ok)
+    m = COMMAND_RE.match("拼豆品牌方")
+    check("拼豆品牌方 走第二分支捕获组", m is not None and m.group(1) is None and m.group(2) == "品牌方")
+    m = COMMAND_RE.match("/拼豆品牌方")
+    check("/拼豆品牌方 同样捕获", m is not None and (m.group(1) or m.group(2)) == "品牌方")
+    m = COMMAND_RE.match("拼豆 品牌方")
+    check("拼豆 品牌方 走第一分支捕获组", m is not None and m.group(1) == "品牌方")
+    m = COMMAND_RE.match("拼豆")
+    check("拼豆 无参数两组皆空", m is not None and m.group(1) is None and m.group(2) is None)
     check("品牌表 8 家且顺序固定", BRAND_ORDER == ("mard", "coco", "manman", "panpan", "mixiaowo", "hama", "perler", "artkal-s"))
 
 

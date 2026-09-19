@@ -78,15 +78,15 @@ class PindoPlugin(Star):
         """拼豆：把图片转成拼豆图纸（拼豆 / 拼豆 MARD / 拼豆品牌方）"""
         raw = event.message_str or ""
         m = COMMAND_RE.match(raw)
-        arg_brand = m.group(1) if m else None
-        if arg_brand == "品牌方":
+        arg = (m.group(1) or m.group(2)) if m else None
+        if arg == "品牌方":
             lines = [f"{i}. {BRAND_LABELS[bid]}" for i, bid in enumerate(BRAND_ORDER, 1)]
             yield event.plain_result("\n".join(lines) + "\n发送「拼豆 序号」或「拼豆 品牌名」选择品牌")
             return
 
-        brand_id = (resolve_brand(arg_brand) if arg_brand else None) or self._default_brand()
-        if arg_brand and resolve_brand(arg_brand) is None:
-            yield event.plain_result(f"未知的品牌「{arg_brand}」，发送「拼豆品牌方」查看可选品牌")
+        brand_id = (resolve_brand(arg) if arg else None) or self._default_brand()
+        if arg and resolve_brand(arg) is None:
+            yield event.plain_result(f"未知的品牌「{arg}」，发送「拼豆品牌方」查看可选品牌")
             return
 
         image = self._extract_first_image(event)
@@ -132,7 +132,7 @@ class PindoPlugin(Star):
 
     @staticmethod
     def _extract_first_image(event: AstrMessageEvent) -> Comp.Image | None:
-        """优先级：消息内图片 > 引用图。群头像由命令入口单独兜底。"""
+        """优先级：消息内图片 > 引用图。@用户头像由命令入口单独兜底。"""
         chain = event.get_messages()
         for seg in chain:
             if isinstance(seg, Comp.Image):
@@ -144,6 +144,28 @@ class PindoPlugin(Star):
                     if isinstance(sub, Comp.Image):
                         return sub
         return None
+
+    @staticmethod
+    def _extract_at_qq(event: AstrMessageEvent) -> str | None:
+        """消息中 @ 的目标用户 QQ 号；未 @ 任何人时返回 None（不读取头像）。"""
+        for seg in event.get_messages():
+            if isinstance(seg, Comp.At):
+                qq = str(getattr(seg, "qq", "") or "")
+                if qq.isdigit():
+                    return qq
+        return None
+
+    async def _avatar_image(self, event: AstrMessageEvent) -> Comp.Image | None:
+        """头像来源：仅当消息 @ 了某位用户（QQ 平台），取被 @ 者的头像。"""
+        try:
+            if event.get_platform_name() != "aiocqhttp":
+                return None
+            at_qq = self._extract_at_qq(event)
+            if not at_qq:
+                return None
+            return Comp.Image.fromURL(f"https://q1.qlogo.cn/g?b=qq&nk={at_qq}&s=640")
+        except Exception:
+            return None
 
     def _start_waiting(self, event: AstrMessageEvent, brand_id: str) -> None:
         key = self._event_key(event)
@@ -159,18 +181,6 @@ class PindoPlugin(Star):
         entry = self._pending.pop(key, None)
         if entry:
             entry[0].cancel()
-
-    async def _avatar_image(self, event: AstrMessageEvent) -> Comp.Image | None:
-        """QQ 平台兜底来源：发起人自己的群头像。"""
-        try:
-            if event.get_platform_name() != "aiocqhttp":
-                return None
-            sender_id = event.get_sender_id()
-            if not sender_id or not str(sender_id).isdigit():
-                return None
-            return Comp.Image.fromURL(f"https://q1.qlogo.cn/g?b=qq&nk={sender_id}&s=640")
-        except Exception:
-            return None
 
     async def _process(self, event: AstrMessageEvent, image: Comp.Image, brand_id: str):
         try:

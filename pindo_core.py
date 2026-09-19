@@ -43,7 +43,7 @@ SUB_GRID = 5
 INFO_TEXT_COLOR = (0x37, 0x41, 0x51)
 INFO_SEPARATOR = (0xE5, 0xE7, 0xEB)
 
-COMMAND_RE = re.compile(r"^\s*/?\s*拼豆(?:\s+(品牌方|\S+))?\s*$|^\s*/?\s*拼豆品牌方\s*$")
+COMMAND_RE = re.compile(r"^\s*/?\s*拼豆(?:\s+(品牌方|\S+))?\s*$|^\s*/?\s*拼豆(品牌方)\s*$")
 
 
 def resolve_brand(token: str | None) -> str | None:
