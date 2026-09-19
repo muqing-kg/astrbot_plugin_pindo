@@ -7,16 +7,17 @@
 （不引用、不 @、不受其他插件 on_decorating_result 钩子影响），
 并在处理后 stop_event 阻断后续插件与 LLM 兜底。
 """
+
 from __future__ import annotations
 
 import asyncio
 import uuid
 from pathlib import Path
 
+import astrbot.api.message_components as Comp
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star
-import astrbot.api.message_components as Comp
 
 try:  # AstrBotConfig：新版在 astrbot.api，部分版本从 star 命名空间导出
     from astrbot.api.star import AstrBotConfig
@@ -39,6 +40,7 @@ except ImportError:  # 兜底：AstrBot 改路径时插件仍可用
 
     def get_astrbot_temp_path() -> str:
         return tempfile.gettempdir()
+
 
 DEFAULT_BASE_WIDTH = 35
 DEFAULT_MAX_COLORS = 16
@@ -71,7 +73,7 @@ class PindoPlugin(Star):
                 )
                 await self._site.start()
             except Exception as e:
-                logger.error(f"Pindo WebUI 启动失败（插件其他功能不受影响）: {e}", exc_info=True)
+                logger.exception(f"Pindo WebUI 启动失败（插件其他功能不受影响）: {e}")
                 self._site = None
 
     async def terminate(self):
@@ -100,7 +102,9 @@ class PindoPlugin(Star):
         arg = (m.group(1) or m.group(2)) if m else None
         if arg == "品牌方":
             lines = [f"{i}. {BRAND_LABELS[bid]}" for i, bid in enumerate(BRAND_ORDER, 1)]
-            await self._reply_text(event, "\n".join(lines) + "\n发送「拼豆 序号」或「拼豆 品牌名」选择品牌")
+            await self._reply_text(
+                event, "\n".join(lines) + "\n发送「拼豆 序号」或「拼豆 品牌名」选择品牌"
+            )
             event.stop_event()
             return
 
@@ -119,7 +123,9 @@ class PindoPlugin(Star):
             return
 
         self._start_waiting(event, brand_id)
-        await self._reply_text(event, f"请在 {self.wait_timeout} 秒内发送要处理的图片（发送「撤销」取消）")
+        await self._reply_text(
+            event, f"请在 {self.wait_timeout} 秒内发送要处理的图片（发送「撤销」取消）"
+        )
         event.stop_event()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
@@ -218,9 +224,11 @@ class PindoPlugin(Star):
         out_path = out_dir / f"pindou_{uuid.uuid4().hex}.png"
 
         try:
+
             def work() -> None:
                 result = pindo_core.generate(
-                    path, brand_id,
+                    path,
+                    brand_id,
                     base_width=DEFAULT_BASE_WIDTH,
                     max_long_edge=self.max_long_edge,
                     max_colors=DEFAULT_MAX_COLORS,
@@ -231,10 +239,13 @@ class PindoPlugin(Star):
             await asyncio.to_thread(work)
         except Exception as e:
             name = type(e).__name__
-            if name in ("UnidentifiedImageError", "DecompressionBombError") or "cannot identify image" in str(e):
+            if name in (
+                "UnidentifiedImageError",
+                "DecompressionBombError",
+            ) or "cannot identify image" in str(e):
                 await self._reply_text(event, "图片解码失败，请发送常见的图片格式（JPG/PNG/WebP）")
             else:
-                logger.error(f"Pindo 图纸生成失败: {e}", exc_info=True)
+                logger.exception(f"Pindo 图纸生成失败: {e}")
                 await self._reply_text(event, "图片处理失败，请换一张图片试试")
             return
 

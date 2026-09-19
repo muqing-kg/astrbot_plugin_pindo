@@ -1,0 +1,7 @@
+# 官方上架要求：提交前通过 ruff check / ruff format
+# BLE001 / S110 豁免：插件在发送、清理、WebUI 生命周期等边界刻意宽捕获，
+# 保证任何异常都不会拖垮 AstrBot 主进程（与生态内其他插件做法一致）。
+line-length = 100
+
+[lint]
+ignore = ["BLE001", "S110"]

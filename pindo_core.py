@@ -7,6 +7,7 @@ RGBA 白底合成 → 线性 RGB 面积平均降采样 → CIEDE2000 最近色�
 原项目：https://github.com/LunarXuan/Pindo （GPL-3.0）
 本文件为其衍生实现，同样以 GPL-3.0 发布。
 """
+
 from __future__ import annotations
 
 import json
@@ -63,6 +64,7 @@ def resolve_brand(token: str | None) -> str | None:
         aliases[label.lower()] = bid
     return aliases.get(t)
 
+
 _PALETTE_CACHE: dict[str, list[dict]] = {}
 
 # ---------------------------------------------------------------- fonts
@@ -98,6 +100,7 @@ def get_font(size: int) -> ImageFont.FreeTypeFont:
 
 # ---------------------------------------------------------------- palette
 
+
 def load_palette(brand: str) -> list[dict]:
     cached = _PALETTE_CACHE.get(brand)
     if cached is not None:
@@ -109,6 +112,7 @@ def load_palette(brand: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------- sRGB / Lab
+
 
 def _build_srgb_lut() -> np.ndarray:
     s = np.arange(256, dtype=np.float64) / 255.0
@@ -155,14 +159,14 @@ def _ciede2000_matrix(lab1: np.ndarray, lab2: np.ndarray, chunk: int = 2048) -> 
     c2 = np.sqrt(a2 * a2 + b2 * b2)
 
     for start in range(0, n, chunk):
-        block = lab1[start:start + chunk]
+        block = lab1[start : start + chunk]
         l1 = block[:, 0:1]
         a1 = block[:, 1:2]
         b1 = block[:, 2:3]
 
         c1 = np.sqrt(a1 * a1 + b1 * b1)
         cab7 = ((c1 + c2) / 2.0) ** 7
-        g = 0.5 * (1.0 - np.sqrt(cab7 / (cab7 + 25.0 ** 7)))
+        g = 0.5 * (1.0 - np.sqrt(cab7 / (cab7 + 25.0**7)))
 
         a1p = a1 * (1.0 + g)
         a2p = a2 * (1.0 + g)
@@ -184,27 +188,36 @@ def _ciede2000_matrix(lab1: np.ndarray, lab2: np.ndarray, chunk: int = 2048) -> 
         hp = np.where(np.abs(h1p - h2p) > 180.0, hp - 180.0, hp)
         hp = np.where(hp < 0, hp + 360.0, hp)
 
-        t = (1.0
-             - 0.17 * np.cos(np.radians(hp - 30.0))
-             + 0.24 * np.cos(np.radians(2.0 * hp))
-             + 0.32 * np.cos(np.radians(3.0 * hp + 6.0))
-             - 0.20 * np.cos(np.radians(4.0 * hp - 63.0)))
+        t = (
+            1.0
+            - 0.17 * np.cos(np.radians(hp - 30.0))
+            + 0.24 * np.cos(np.radians(2.0 * hp))
+            + 0.32 * np.cos(np.radians(3.0 * hp + 6.0))
+            - 0.20 * np.cos(np.radians(4.0 * hp - 63.0))
+        )
 
         sl = 1.0 + 0.015 * (lp - 50.0) ** 2 / np.sqrt(20.0 + (lp - 50.0) ** 2)
         sc = 1.0 + 0.045 * cp
         sh = 1.0 + 0.015 * cp * t
 
-        cp7 = cp ** 7
-        rt = (-2.0 * np.sqrt(cp7 / (cp7 + 25.0 ** 7))
-              * np.sin(np.radians(60.0 * np.exp(-((hp - 275.0) / 25.0) ** 2))))
+        cp7 = cp**7
+        rt = (
+            -2.0
+            * np.sqrt(cp7 / (cp7 + 25.0**7))
+            * np.sin(np.radians(60.0 * np.exp(-(((hp - 275.0) / 25.0) ** 2))))
+        )
 
-        out[start:start + chunk] = np.sqrt(
-            (dlp / sl) ** 2 + (dcp / sc) ** 2 + (dhp_big / sh) ** 2 + rt * (dcp / sc) * (dhp_big / sh)
+        out[start : start + chunk] = np.sqrt(
+            (dlp / sl) ** 2
+            + (dcp / sc) ** 2
+            + (dhp_big / sh) ** 2
+            + rt * (dcp / sc) * (dhp_big / sh)
         )
     return out
 
 
 # ---------------------------------------------------------------- downscale
+
 
 def downscale_average(rgb: np.ndarray, dst_w: int, dst_h: int) -> np.ndarray:
     """移植 downscaler.ts downscaleAverage：sRGB→线性→面积平均→sRGB。
@@ -233,6 +246,7 @@ def downscale_average(rgb: np.ndarray, dst_w: int, dst_h: int) -> np.ndarray:
 
 
 # ---------------------------------------------------------------- 限色（palette-limit.ts 逐行移植）
+
 
 def _luminance(color: dict) -> float:
     r, g, b = color["rgb"]
@@ -316,20 +330,22 @@ def limit_palette_with_key_colors(
 
 # ---------------------------------------------------------------- 管线
 
+
 @dataclass
 class GenerateResult:
     brand: str
     width: int
     height: int
-    cells: list[list[str]]                 # colorId 网格
-    palette: list[dict]                    # 最终使用的（限色后）色板
-    usage: list[tuple[dict, int]]          # 用量，按色号自然序 + 数量降序
+    cells: list[list[str]]  # colorId 网格
+    palette: list[dict]  # 最终使用的（限色后）色板
+    usage: list[tuple[dict, int]]  # 用量，按色号自然序 + 数量降序
 
 
 def _natural_key(code: str) -> tuple:
     return tuple(
         (0, int(part), "") if part.isdigit() else (1, 0, part)
-        for part in re.split(r"(\d+)", code) if part != ""
+        for part in re.split(r"(\d+)", code)
+        if part != ""
     )
 
 
@@ -340,7 +356,9 @@ def _match_indices(pixels: np.ndarray, palette: list[dict]) -> np.ndarray:
     return dists.argmin(axis=1)
 
 
-def compute_size(src_w: int, src_h: int, base_width: int = 35, max_long_edge: int = 120) -> tuple[int, int]:
+def compute_size(
+    src_w: int, src_h: int, base_width: int = 35, max_long_edge: int = 120
+) -> tuple[int, int]:
     """不锁比例：宽取 base_width，高按原图比例；任意一边超出 max_long_edge 时等比压缩。"""
     w = max(1, int(base_width))
     h = max(1, round(w * src_h / src_w))
@@ -387,20 +405,22 @@ def generate(
         usage = Counter(used_palette[i]["id"] for i in matched_idx)
 
     by_id = {c["id"]: c for c in used_palette}
-    cells = [
-        [used_palette[int(matched_idx[y * w + x])]["id"] for x in range(w)]
-        for y in range(h)
-    ]
+    cells = [[used_palette[int(matched_idx[y * w + x])]["id"] for x in range(w)] for y in range(h)]
     usage_list = sorted(
         ((by_id[cid], count) for cid, count in usage.items() if cid in by_id),
         key=lambda item: (_natural_key(item[0]["code"]), -item[1]),
     )
-    return GenerateResult(brand=brand, width=w, height=h, cells=cells, palette=used_palette, usage=usage_list)
+    return GenerateResult(
+        brand=brand, width=w, height=h, cells=cells, palette=used_palette, usage=usage_list
+    )
 
 
 # ---------------------------------------------------------------- 渲染（png-exporter.ts 移植 + 信息条）
 
-def _get_legend_layout(used_count: int, total_w: int, border_w: int, cell_size: int, measure) -> dict:
+
+def _get_legend_layout(
+    used_count: int, total_w: int, border_w: int, cell_size: int, measure
+) -> dict:
     font_px = max(14, round(cell_size * 0.3))
     gap = max(6, round(cell_size * 0.14))
     chip_h = max(28, round(font_px * 1.85))
@@ -411,10 +431,17 @@ def _get_legend_layout(used_count: int, total_w: int, border_w: int, cell_size: 
     rows = math.ceil(used_count / columns) if used_count else 0
     padding_top = max(10, round(cell_size * 0.25))
     padding_bottom = max(12, round(cell_size * 0.28))
-    height = padding_top + rows * chip_h + max(0, rows - 1) * gap + padding_bottom if used_count else 0
+    height = (
+        padding_top + rows * chip_h + max(0, rows - 1) * gap + padding_bottom if used_count else 0
+    )
     return {
-        "columns": columns, "chip_w": chip_w, "chip_h": chip_h, "gap": gap,
-        "font_px": font_px, "padding_top": padding_top, "height": height,
+        "columns": columns,
+        "chip_w": chip_w,
+        "chip_h": chip_h,
+        "gap": gap,
+        "font_px": font_px,
+        "padding_top": padding_top,
+        "height": height,
     }
 
 
@@ -460,40 +487,68 @@ def render_pattern_png(
             draw.rectangle([px, py, px + cell, py + cell], fill=tuple(color["rgb"]))
             if show_codes and cell >= 16:
                 r, g, b = color["rgb"]
-                text_color = (0, 0, 0) if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 else (255, 255, 255)
-                draw.text((px + cell / 2, py + cell / 2), color["code"], font=code_font,
-                          fill=text_color, anchor="mm")
+                text_color = (
+                    (0, 0, 0)
+                    if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
+                    else (255, 255, 255)
+                )
+                draw.text(
+                    (px + cell / 2, py + cell / 2),
+                    color["code"],
+                    font=code_font,
+                    fill=text_color,
+                    anchor="mm",
+                )
 
     # 2. 半透明线条：细网格 → 中粗子网格 → 最粗拼板线（单层 RGBA 叠加后合成）
     if show_grid:
         overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
         odraw = ImageDraw.Draw(overlay)
         for bx in range(width + 1):
-            odraw.line([(ox + bx * cell, oy), (ox + bx * cell, oy + grid_h)], fill=(0, 0, 0, 64), width=1)
+            odraw.line(
+                [(ox + bx * cell, oy), (ox + bx * cell, oy + grid_h)], fill=(0, 0, 0, 64), width=1
+            )
         for by in range(height + 1):
-            odraw.line([(ox, oy + by * cell), (ox + grid_w, oy + by * cell)], fill=(0, 0, 0, 64), width=1)
+            odraw.line(
+                [(ox, oy + by * cell), (ox + grid_w, oy + by * cell)], fill=(0, 0, 0, 64), width=1
+            )
         mid_w = max(1, round(cell * 0.04))
         for bx in range(SUB_GRID, width, SUB_GRID):
             if bx % BOARD_SIZE == 0:
                 continue
-            odraw.line([(ox + bx * cell, oy), (ox + bx * cell, oy + grid_h)], fill=(0, 0, 0, 102), width=mid_w)
+            odraw.line(
+                [(ox + bx * cell, oy), (ox + bx * cell, oy + grid_h)],
+                fill=(0, 0, 0, 102),
+                width=mid_w,
+            )
         for by in range(SUB_GRID, height, SUB_GRID):
             if by % BOARD_SIZE == 0:
                 continue
-            odraw.line([(ox, oy + by * cell), (ox + grid_w, oy + by * cell)], fill=(0, 0, 0, 102), width=mid_w)
+            odraw.line(
+                [(ox, oy + by * cell), (ox + grid_w, oy + by * cell)],
+                fill=(0, 0, 0, 102),
+                width=mid_w,
+            )
         thick_w = max(2, round(cell * 0.08))
         for bx in range(0, width + 1, BOARD_SIZE):
-            odraw.line([(ox + min(bx, width) * cell, oy), (ox + min(bx, width) * cell, oy + grid_h)],
-                       fill=(0, 0, 0, 178), width=thick_w)
+            odraw.line(
+                [(ox + min(bx, width) * cell, oy), (ox + min(bx, width) * cell, oy + grid_h)],
+                fill=(0, 0, 0, 178),
+                width=thick_w,
+            )
         for by in range(0, height + 1, BOARD_SIZE):
-            odraw.line([(ox, oy + min(by, height) * cell), (ox + grid_w, oy + min(by, height) * cell)],
-                       fill=(0, 0, 0, 178), width=thick_w)
+            odraw.line(
+                [(ox, oy + min(by, height) * cell), (ox + grid_w, oy + min(by, height) * cell)],
+                fill=(0, 0, 0, 178),
+                width=thick_w,
+            )
         img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
         draw = ImageDraw.Draw(img)
 
     # 3. 蓝紫色外框（网格区四周，不含图例区）
-    draw.rectangle([0, 0, total_w - 1, grid_h + 2 * border_w - 1],
-                   outline=BORDER_COLOR, width=border_w)
+    draw.rectangle(
+        [0, 0, total_w - 1, grid_h + 2 * border_w - 1], outline=BORDER_COLOR, width=border_w
+    )
 
     # 4. 底部用量图例：圆角色块「色号（数量）」
     if legend_h > 0 and result.usage:
@@ -507,12 +562,24 @@ def render_pattern_png(
             label = f"{color['code']}（{count}）"
             r, g, b = color["rgb"]
             draw.rounded_rectangle(
-                [x, y, x + layout["chip_w"], y + layout["chip_h"]], radius=radius,
-                fill=tuple(color["rgb"]), outline=tuple(int(c * 0.82) for c in color["rgb"]), width=1,
+                [x, y, x + layout["chip_w"], y + layout["chip_h"]],
+                radius=radius,
+                fill=tuple(color["rgb"]),
+                outline=tuple(int(c * 0.82) for c in color["rgb"]),
+                width=1,
             )
-            text_color = (0x11, 0x18, 0x27) if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58 else (255, 255, 255)
-            draw.text((x + layout["chip_w"] / 2, y + layout["chip_h"] / 2), label,
-                      font=legend_font, fill=text_color, anchor="mm")
+            text_color = (
+                (0x11, 0x18, 0x27)
+                if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.58
+                else (255, 255, 255)
+            )
+            draw.text(
+                (x + layout["chip_w"] / 2, y + layout["chip_h"] / 2),
+                label,
+                font=legend_font,
+                fill=text_color,
+                anchor="mm",
+            )
 
     # 5. 信息条（Pindo 原版没有，按需求追加）：机器人名 · 品牌 ｜ W × H ｜ 共 N 粒
     if info_h > 0:
@@ -520,9 +587,17 @@ def render_pattern_png(
         draw.line([(0, bar_top), (total_w, bar_top)], fill=INFO_SEPARATOR, width=1)
         total_beads = sum(count for _, count in result.usage)
         label = BRAND_LABELS.get(result.brand, result.brand)
-        text = f"{watermark} · {label} ｜ {width} × {height} ｜ 共 {total_beads:,} 粒" if watermark \
+        text = (
+            f"{watermark} · {label} ｜ {width} × {height} ｜ 共 {total_beads:,} 粒"
+            if watermark
             else f"{label} ｜ {width} × {height} ｜ 共 {total_beads:,} 粒"
-        draw.text((total_w / 2, bar_top + info_h / 2), text, font=info_font,
-                  fill=INFO_TEXT_COLOR, anchor="mm")
+        )
+        draw.text(
+            (total_w / 2, bar_top + info_h / 2),
+            text,
+            font=info_font,
+            fill=INFO_TEXT_COLOR,
+            anchor="mm",
+        )
 
     return img

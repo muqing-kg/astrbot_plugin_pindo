@@ -8,6 +8,7 @@ aiohttp 是 AstrBot 框架自带依赖，无需在 requirements.txt 声明。
 替换为配置值——必须连客户端 JS bundle 一起替换，否则 React 19 hydration
 会用打包内硬编码标题把 DOM 改回去。二进制文件不含该模式串，替换零开销。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ try:
     from astrbot.api import logger
 except ImportError:  # 本地自检环境无 astrbot
     import logging
+
     logger = logging.getLogger("pindo")
 
 
@@ -32,8 +34,14 @@ DEFAULT_SITE_TITLE = "Pindo 拼豆图纸生成器"
 class SiteServer:
     """托管插件内置的 Pindo 静态站点。"""
 
-    def __init__(self, static_dir: str | Path, host: str = "0.0.0.0", port: int = 8765,
-                 site_title: str = "", site_logo: str = ""):
+    def __init__(
+        self,
+        static_dir: str | Path,
+        host: str = "0.0.0.0",
+        port: int = 8765,
+        site_title: str = "",
+        site_logo: str = "",
+    ):
         self.static_dir = Path(static_dir).resolve()
         self.host = host
         self.port = port
@@ -49,9 +57,13 @@ class SiteServer:
         """读取文件；配置了自定义标题/Logo 时替换占位符后返回。"""
         data = file.read_bytes()
         if self.site_title and self.site_title != DEFAULT_SITE_TITLE:
-            data = data.replace(DEFAULT_SITE_TITLE.encode("utf-8"),
-                                self.site_title.encode("utf-8"))
-        logo_url = (self.site_logo or "/logo.png").replace('"', "%22").replace("<", "%3C").replace(">", "%3E")
+            data = data.replace(DEFAULT_SITE_TITLE.encode("utf-8"), self.site_title.encode("utf-8"))
+        logo_url = (
+            (self.site_logo or "/logo.png")
+            .replace('"', "%22")
+            .replace("<", "%3C")
+            .replace(">", "%3E")
+        )
         data = data.replace(b"__SITE_LOGO__", logo_url.encode("utf-8"))
         ctype, _enc = mimetypes.guess_type(str(file))
         if ctype is None:
@@ -59,7 +71,9 @@ class SiteServer:
         if ctype == "application/json" and file.name == "manifest.json":
             ctype = "application/manifest+json"
         if ctype.startswith("text/") or ctype in (
-            "application/javascript", "application/json", "application/manifest+json",
+            "application/javascript",
+            "application/json",
+            "application/manifest+json",
         ):
             return web.Response(body=data, content_type=ctype, charset="utf-8")
         return web.Response(body=data, content_type=ctype)
@@ -117,7 +131,9 @@ class SiteServer:
                 host: str | None = None if self.host in ("0.0.0.0", "::") else self.host
                 site = web.TCPSite(self.runner, host, self.port)
                 await site.start()
-                logger.info(f"Pindo WebUI 已启动: http://{self.host}:{self.port} （静态目录 {self.static_dir}）")
+                logger.info(
+                    f"Pindo WebUI 已启动: http://{self.host}:{self.port} （静态目录 {self.static_dir}）"
+                )
                 return
             except OSError as e:
                 if self.runner:
@@ -128,15 +144,17 @@ class SiteServer:
                     self.runner = None
                 if getattr(e, "errno", 0) == errno.EADDRINUSE:
                     if attempt < MAX_RETRY:
-                        logger.warning(f"Pindo WebUI 端口 {self.port} 被占用，{RETRY_DELAY} 秒后重试（{attempt}/{MAX_RETRY}）")
+                        logger.warning(
+                            f"Pindo WebUI 端口 {self.port} 被占用，{RETRY_DELAY} 秒后重试（{attempt}/{MAX_RETRY}）"
+                        )
                         await asyncio.sleep(RETRY_DELAY)
                     else:
                         logger.error(f"Pindo WebUI 启动失败：端口 {self.port} 持续被占用，已放弃")
                 else:
                     logger.error(f"Pindo WebUI 启动失败: {e}，已放弃")
                     return
-            except Exception as e:
-                logger.error(f"Pindo WebUI 启动遇到未知错误: {e}", exc_info=True)
+            except Exception:
+                logger.exception("Pindo WebUI 启动遇到未知错误")
                 if self.runner:
                     try:
                         await self.runner.cleanup()
