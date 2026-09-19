@@ -47,6 +47,6 @@ PINDO_REPO=/path/to/Pindo python test_core.py
 
 ## 许可证
 
-Copyright © 2026 LunarXuan（原项目 Pindo）；本插件修改与新增部分 Copyright © 2026 muqing-kg。
+Copyright © 2026 LunarXuan（原项目 Pindo）；本插件修改与新增部分 Copyright © 2026 沐倾。
 
 本程序自由软件，依据 [GNU 通用公共许可证第 3 版](LICENSE) 授权，不附带任何担保。`fonts/` 目录下的 Noto Sans SC 字体依据 SIL Open Font License 1.1 单独授权。
