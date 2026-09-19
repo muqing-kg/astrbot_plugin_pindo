@@ -260,25 +260,61 @@ def test_palettes() -> None:
 
 
 def test_interaction_logic() -> None:
-    """收图交互决策：图片 > 引用图 > @头像；@ 头像仅在无图时兜底。"""
-    print("[8] 收图交互决策（main.py 包式加载）")
+    """交互全链路：直发不引用、stop_event、图片 > @头像、补图与撤销、超时静默。"""
+    print("[8] 收图交互决策（main.py 包式加载，假事件全链路）")
     import types
     import logging
+    import asyncio
     import importlib
 
     pkg = types.ModuleType('astrbot'); pkg.__path__ = []
     api = types.ModuleType('astrbot.api'); api.logger = logging.getLogger('t')
     api.AstrBotConfig = type('AstrBotConfig', (dict,), {})
     event_m = types.ModuleType('astrbot.api.event'); event_m.AstrMessageEvent = object
+
+    class FakeChain:
+        def __init__(self):
+            self.items = []
+
+        def message(self, text):
+            self.items.append(('text', text))
+            return self
+
+        def file_image(self, path):
+            self.items.append(('file', str(path)))
+            return self
+
+    event_m.MessageChain = FakeChain
     event_m.filter = types.SimpleNamespace(
         regex=lambda *a, **k: (lambda f: f),
         event_message_type=lambda *a, **k: (lambda f: f),
         EventMessageType=types.SimpleNamespace(ALL=1))
-    star = types.ModuleType('astrbot.api.star'); star.Context = object; star.Star = object
+    star = types.ModuleType('astrbot.api.star')
+    star.Context = object
+    star.Star = type('Star', (), {'__init__': lambda self, ctx: None})
     comp = types.ModuleType('astrbot.api.message_components')
 
     class Image:
-        pass
+        from_url = None
+        download_target = None  # 桩：模拟框架把 url 下载为本地路径
+
+        def __init__(self, path=None, url=None):
+            self.path, self.url, self.file = path, url, None
+
+        async def convert_to_file_path(self):
+            if self.path:
+                return self.path
+            if self.url and type(self).download_target:
+                return type(self).download_target  # 框架行为：URL 自动下载
+            raise RuntimeError('no local file (avatar url)')
+
+        @classmethod
+        def fromURL(cls, url):
+            return cls(url=url)
+
+        @classmethod
+        def fromFileSystem(cls, path):
+            return cls(path=path)
 
     class Reply:
         def __init__(self, chain=None):
@@ -293,24 +329,111 @@ def test_interaction_logic() -> None:
                         'astrbot.api.star': star, 'astrbot.api.message_components': comp})
     parent = str(Path(__file__).resolve().parent.parent)
     sys.path.insert(0, parent)
+
+    class FakeEvent:
+        def __init__(self, chain=(), text='', sender='10001', platform='aiocqhttp', umo='aiocqhttp:Group_1'):
+            self._chain = list(chain)
+            self.message_str = text
+            self.sender, self.platform, self.unified_msg_origin = sender, platform, umo
+            self.sent = []
+            self.stopped = False
+
+        def get_messages(self):
+            return self._chain
+
+        def get_sender_id(self):
+            return self.sender
+
+        def get_platform_name(self):
+            return self.platform
+
+        async def send(self, chain):
+            self.sent.append(list(chain.items))
+
+        def stop_event(self):
+            self.stopped = True
+
+    async def scenarios(mod):
+        P = mod.PindoPlugin
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / 'src.png'
+            _make_photo(src)
+
+            # 1. 品牌方列表
+            p = P(object(), {})
+            ev = FakeEvent(text='拼豆品牌方')
+            await p.pindou(ev)
+            texts = [t for kind, t in sum(ev.sent, []) if kind == 'text']
+            check('品牌方返回列表而非图片', len(ev.sent) == 1 and all(k == 'text' for s in ev.sent for k, _ in s)
+                  and '1. MARD' in texts[0] and '8. Artkal S' in texts[0], f'got {ev.sent}')
+            check('品牌方后 stop_event', ev.stopped)
+
+            # 2. 拼豆 + 图片 → 直发图片
+            p2 = P(object(), {'robot_watermark': '云霄'})
+            ev2 = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2.pindou(ev2)
+            files = [t for s in ev2.sent for k, t in s if k == 'file']
+            check('有图直接出图（直发 file_image）', len(files) == 1 and Path(files[0]).exists(), f'got {ev2.sent}')
+            check('出图后 stop_event', ev2.stopped)
+
+            # 3. @ + 图片同存 → 图片优先，头像不参与
+            p3 = P(object(), {})
+            ev3 = FakeEvent(chain=[At('114514'), Image(path=str(src))], text='拼豆')
+            await p3.pindou(ev3)
+            check('@+图片时图片优先', len([t for s in ev3.sent for k, t in s if k == 'file']) == 1)
+
+            # 4. 无图仅 @ → 取被 @ 者头像出图
+            p4 = P(object(), {})
+            Image.download_target = str(src)
+            ev4 = FakeEvent(chain=[At('222333')], text='拼豆 coco')
+            await p4.pindou(ev4)
+            check('仅 @ 时取被 @ 者头像出图', len([t for s in ev4.sent for k, t in s if k == 'file']) == 1)
+
+            p5 = P(object(), {})
+            ev5 = FakeEvent(text='拼豆 coco')
+            await p5.pindou(ev5)
+            prompts = [t for s in ev5.sent for k, t in s if k == 'text']
+            check('无图无 @ 进入补图等待', '30 秒内发送' in prompts[0] and len(p5._pending) == 1, f'got {ev5.sent}')
+            ev5b = FakeEvent(chain=[Image(path=str(src))], text='[图片]')
+            await p5.on_message(ev5b)
+            check('补图出图并清空等待', len(p5._pending) == 0
+                  and len([t for s in ev5b.sent for k, t in s if k == 'file']) == 1)
+
+            # 5. 撤销
+            p6 = P(object(), {})
+            ev6 = FakeEvent(text='拼豆')
+            await p6.pindou(ev6)
+            ev6b = FakeEvent(text='撤销')
+            await p6.on_message(ev6b)
+            texts6 = [t for s in ev6b.sent for k, t in s if k == 'text']
+            check('撤销回「已取消」并清空等待', texts6 == ['已取消'] and len(p6._pending) == 0)
+
+            # 6. 超时静默
+            p7 = P(object(), {'wait_timeout': 1})
+            ev7 = FakeEvent(text='拼豆')
+            await p7.pindou(ev7)
+            key = next(iter(p7._pending))
+            n_sent = len(ev7.sent)
+            p7._expire(key)
+            await asyncio.sleep(0.05)
+            check('超时静默：无任何提示', len(p7._pending) == 0 and len(ev7.sent) == n_sent)
+
+            # 7. 未知品牌
+            p8 = P(object(), {})
+            ev8 = FakeEvent(text='拼豆 不存在的牌子')
+            await p8.pindou(ev8)
+            texts8 = [t for s in ev8.sent for k, t in s if k == 'text']
+            check('未知品牌给出引导', '未知的品牌' in texts8[0] and '拼豆品牌方' in texts8[0])
+
+            # 8. 非 QQ 平台无 @ 头像通道
+            p9 = P(object(), {})
+            ev9 = FakeEvent(text='拼豆', platform='telegram')
+            await p9.pindou(ev9)
+            check('非 QQ 平台无头像兜底，进等待', '30 秒内发送' in ev9.sent[0][0][1])
+
     try:
         mod = importlib.import_module('astrbot_plugin_pindo.main')
-        P = mod.PindoPlugin
-        img, at = Image(), At('114514')
-
-        ev = types.SimpleNamespace(get_messages=lambda: [at, img])
-        check("@+图片同存时图片优先", P._extract_first_image(ev) is img)
-        ev2 = types.SimpleNamespace(get_messages=lambda: [at])
-        check("仅 @ 时无图片可取（走头像兜底）", P._extract_first_image(ev2) is None)
-        check("@ 提取被 @ 者 QQ", P._extract_at_qq(ev) == '114514')
-        ev3 = types.SimpleNamespace(get_messages=lambda: [Image()])
-        check("有图无 @ 时不读头像", P._extract_at_qq(ev3) is None)
-        ev4 = types.SimpleNamespace(get_messages=lambda: [Reply([Image()])])
-        check("引用链内图片可取", P._extract_first_image(ev4) is not None)
-        ev5 = types.SimpleNamespace(get_messages=lambda: [Reply([At('1919')])])
-        check("@ 藏在引用链内不算（顶层为准）", P._extract_at_qq(ev5) is None)
-        g = mod.COMMAND_RE.match('拼豆品牌方')
-        check("品牌方参数归位", (g.group(1) or g.group(2)) == '品牌方')
+        asyncio.run(scenarios(mod))
     finally:
         sys.path.remove(parent)
         for k in [k for k in sys.modules if k.startswith('astrbot_plugin_pindo')]:

@@ -2,6 +2,10 @@
 
 收图 → 按品牌色板生成带色号与用量统计的拼豆图纸 PNG。
 引擎移植自 LunarXuan/Pindo（GPL-3.0），本插件同样以 GPL-3.0 发布。
+
+回复一律经 event.send(MessageChain) 直发：绕过框架结果装饰管线
+（不引用、不 @、不受其他插件 on_decorating_result 钩子影响），
+并在处理后 stop_event 阻断后续插件与 LLM 兜底。
 """
 from __future__ import annotations
 
@@ -18,6 +22,11 @@ try:  # AstrBotConfig：新版在 astrbot.api，部分版本从 star 命名空�
     from astrbot.api.star import AstrBotConfig
 except ImportError:
     from astrbot.api import AstrBotConfig
+
+try:  # MessageChain：v4 由 astrbot.api.event 导出，兜底 core 路径
+    from astrbot.api.event import MessageChain
+except ImportError:
+    from astrbot.core.message.message_event_result import MessageChain
 
 from . import pindo_core
 from .pindo_core import BRAND_LABELS, BRAND_ORDER, COMMAND_RE, resolve_brand
@@ -71,6 +80,14 @@ class PindoPlugin(Star):
                 logger.warning(f"Pindo WebUI 停止异常（已忽略）: {e}")
             self._site = None
 
+    # ---------------------------------------------------------- 直发回复
+
+    async def _reply_text(self, event: AstrMessageEvent, text: str) -> None:
+        await event.send(MessageChain().message(text))
+
+    async def _reply_image(self, event: AstrMessageEvent, path: Path) -> None:
+        await event.send(MessageChain().file_image(str(path)))
+
     # ---------------------------------------------------------- 命令
 
     @filter.regex(COMMAND_RE.pattern)
@@ -81,24 +98,27 @@ class PindoPlugin(Star):
         arg = (m.group(1) or m.group(2)) if m else None
         if arg == "品牌方":
             lines = [f"{i}. {BRAND_LABELS[bid]}" for i, bid in enumerate(BRAND_ORDER, 1)]
-            yield event.plain_result("\n".join(lines) + "\n发送「拼豆 序号」或「拼豆 品牌名」选择品牌")
+            await self._reply_text(event, "\n".join(lines) + "\n发送「拼豆 序号」或「拼豆 品牌名」选择品牌")
+            event.stop_event()
             return
 
         brand_id = (resolve_brand(arg) if arg else None) or self._default_brand()
         if arg and resolve_brand(arg) is None:
-            yield event.plain_result(f"未知的品牌「{arg}」，发送「拼豆品牌方」查看可选品牌")
+            await self._reply_text(event, f"未知的品牌「{arg}」，发送「拼豆品牌方」查看可选品牌")
+            event.stop_event()
             return
 
         image = self._extract_first_image(event)
         if image is None:
             image = await self._avatar_image(event)
         if image is not None:
-            async for r in self._process(event, image, brand_id):
-                yield r
+            await self._process(event, image, brand_id)
+            event.stop_event()
             return
 
         self._start_waiting(event, brand_id)
-        yield event.plain_result(f"请在 {self.wait_timeout} 秒内发送要处理的图片（发送「撤销」取消）")
+        await self._reply_text(event, f"请在 {self.wait_timeout} 秒内发送要处理的图片（发送「撤销」取消）")
+        event.stop_event()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -112,14 +132,15 @@ class PindoPlugin(Star):
         text = (event.message_str or "").strip()
         if text == "撤销":
             self._clear_pending(key)
-            yield event.plain_result("已取消")
+            await self._reply_text(event, "已取消")
+            event.stop_event()
             return
         image = self._extract_first_image(event)
         if image is None:
             return
         self._clear_pending(key)
-        async for r in self._process(event, image, pending[1]):
-            yield r
+        await self._process(event, image, pending[1])
+        event.stop_event()
 
     # ---------------------------------------------------------- 核心
 
@@ -182,12 +203,12 @@ class PindoPlugin(Star):
         if entry:
             entry[0].cancel()
 
-    async def _process(self, event: AstrMessageEvent, image: Comp.Image, brand_id: str):
+    async def _process(self, event: AstrMessageEvent, image: Comp.Image, brand_id: str) -> None:
         try:
             path = await image.convert_to_file_path()
         except Exception as e:
             logger.warning(f"Pindo 图片获取失败: {e}")
-            yield event.plain_result("图片下载失败，请换一张或重新发送")
+            await self._reply_text(event, "图片下载失败，请换一张或重新发送")
             return
 
         out_dir = Path(get_astrbot_temp_path()) / "pindou"
@@ -209,10 +230,10 @@ class PindoPlugin(Star):
         except Exception as e:
             name = type(e).__name__
             if name in ("UnidentifiedImageError", "DecompressionBombError") or "cannot identify image" in str(e):
-                yield event.plain_result("图片解码失败，请发送常见的图片格式（JPG/PNG/WebP）")
+                await self._reply_text(event, "图片解码失败，请发送常见的图片格式（JPG/PNG/WebP）")
             else:
                 logger.error(f"Pindo 图纸生成失败: {e}", exc_info=True)
-                yield event.plain_result("图片处理失败，请换一张图片试试")
+                await self._reply_text(event, "图片处理失败，请换一张图片试试")
             return
 
-        yield event.image_result(str(out_path))
+        await self._reply_image(event, out_path)
