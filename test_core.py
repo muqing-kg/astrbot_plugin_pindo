@@ -368,13 +368,27 @@ def test_interaction_logic() -> None:
                   and '1. MARD' in texts[0] and '8. Artkal S' in texts[0], f'got {ev.sent}')
             check('品牌方后 stop_event', ev.stopped)
 
-            # 2. 拼豆 + 图片 → 直发图片
+            # 2. 拼豆 + 图片 → 直发图片（未配置网站地址，无提示）
             p2 = P(object(), {'robot_watermark': '云霄'})
             ev2 = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
             await p2.pindou(ev2)
             files = [t for s in ev2.sent for k, t in s if k == 'file']
             check('有图直接出图（直发 file_image）', len(files) == 1 and Path(files[0]).exists(), f'got {ev2.sent}')
             check('出图后 stop_event', ev2.stopped)
+            check('未配置网站地址时不发提示', all(k != 'text' for s in ev2.sent for k, _ in s))
+
+            # 2b. 配置网站地址 + 开关开 → 图后附提示
+            p2b = P(object(), {'site_url': 'http://1.2.3.4:8765'})
+            ev2b = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2b.pindou(ev2b)
+            texts2b = [t for s in ev2b.sent for k, t in s if k == 'text']
+            check('出图附带网站提示', texts2b == ['完整功能请前往 http://1.2.3.4:8765'], f'got {ev2b.sent}')
+
+            # 2c. 开关关 → 只发图
+            p2c = P(object(), {'site_url': 'http://1.2.3.4:8765', 'send_site_hint': False})
+            ev2c = FakeEvent(chain=[Image(path=str(src))], text='拼豆')
+            await p2c.pindou(ev2c)
+            check('开关关闭时不发提示', all(k == 'file' for s in ev2c.sent for k, _ in s))
 
             # 3. @ + 图片同存 → 图片优先，头像不参与
             p3 = P(object(), {})

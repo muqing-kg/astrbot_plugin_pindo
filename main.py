@@ -52,6 +52,8 @@ class PindoPlugin(Star):
         self.watermark = str(config.get("robot_watermark", "")).strip()
         self.wait_timeout = int(config.get("wait_timeout", 30))
         self.max_long_edge = int(config.get("max_long_edge", 120))
+        self.site_url = str(config.get("site_url", "")).strip()
+        self.send_site_hint = bool(config.get("send_site_hint", True))
         self._pending: dict[tuple[str, str], tuple[asyncio.TimerHandle, str]] = {}
         self._site: SiteServer | None = None
 
@@ -237,3 +239,5 @@ class PindoPlugin(Star):
             return
 
         await self._reply_image(event, out_path)
+        if self.send_site_hint and self.site_url:
+            await self._reply_text(event, f"完整功能请前往 {self.site_url}")

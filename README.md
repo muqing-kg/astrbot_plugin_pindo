@@ -37,6 +37,8 @@
 | `max_long_edge` | `120` | 图纸最长边颗数上限 |
 | `enable_site` | `true` | 是否启用内置 WebUI |
 | `site_host` / `site_port` | `0.0.0.0` / `8765` | WebUI 监听地址与端口 |
+| `site_url` | 空 | WebUI 外部访问地址；出图提示使用 |
+| `send_site_hint` | `true` | 出图时附带「完整功能请前往 …」文字（地址为空则不发送） |
 
 ## 开发自检
 

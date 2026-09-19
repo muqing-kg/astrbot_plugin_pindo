@@ -41,5 +41,17 @@
     "type": "int",
     "default": 8765,
     "hint": "独立于 AstrBot 面板（6185）；公网访问需在防火墙/安全组放行该端口"
+  },
+  "site_url": {
+    "description": "外部访问网站地址",
+    "type": "string",
+    "default": "",
+    "hint": "填写 WebUI 的公网地址（如 http://服务器IP:8765）；出图提示文案使用该地址"
+  },
+  "send_site_hint": {
+    "description": "出图时附带网站提示",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后出图会附带「完整功能请前往 …」一条文字；上方地址为空时不发送"
   }
 }
