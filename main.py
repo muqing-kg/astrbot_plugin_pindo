@@ -87,9 +87,6 @@ class PindoPlugin(Star):
     async def _reply_text(self, event: AstrMessageEvent, text: str) -> None:
         await event.send(MessageChain().message(text))
 
-    async def _reply_image(self, event: AstrMessageEvent, path: Path) -> None:
-        await event.send(MessageChain().file_image(str(path)))
-
     # ---------------------------------------------------------- 命令
 
     @filter.regex(COMMAND_RE.pattern)
@@ -238,6 +235,7 @@ class PindoPlugin(Star):
                 await self._reply_text(event, "图片处理失败，请换一张图片试试")
             return
 
-        await self._reply_image(event, out_path)
+        chain = MessageChain().file_image(str(out_path))
         if self.send_site_hint and self.site_url:
-            await self._reply_text(event, f"完整功能请前往 {self.site_url}")
+            chain = chain.message(f"完整功能请前往 {self.site_url}")
+        await event.send(chain)
