@@ -1,0 +1,2 @@
+# 引擎数值计算依赖（Pillow / aiohttp 均为 AstrBot 框架自带，无需重复声明）
+numpy>=1.26

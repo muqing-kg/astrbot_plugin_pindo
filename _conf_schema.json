@@ -1,0 +1,45 @@
+{
+  "default_brand": {
+    "description": "默认品牌色板",
+    "type": "string",
+    "options": ["mard", "coco", "manman", "panpan", "mixiaowo", "hama", "perler", "artkal-s"],
+    "default": "mard",
+    "hint": "「拼豆」不带品牌参数时使用的色板"
+  },
+  "robot_watermark": {
+    "description": "机器人名水印",
+    "type": "string",
+    "default": "",
+    "hint": "显示在图纸底部信息条开头，留空则不显示"
+  },
+  "wait_timeout": {
+    "description": "补图等待时长（秒）",
+    "type": "int",
+    "default": 30,
+    "hint": "「拼豆」未带图时等待发送人补图的窗口，超时静默结束"
+  },
+  "max_long_edge": {
+    "description": "图纸最长边颗数上限",
+    "type": "int",
+    "default": 120,
+    "hint": "不锁比例，默认宽 35 颗；任一边超过此值时等比压缩到该值"
+  },
+  "enable_site": {
+    "description": "启用内置 WebUI（Pindo 网页版）",
+    "type": "bool",
+    "default": true,
+    "hint": "由插件自带 HTTP 服务托管，修改端口后需重载插件生效"
+  },
+  "site_host": {
+    "description": "WebUI 监听地址",
+    "type": "string",
+    "default": "0.0.0.0",
+    "hint": "对外提供访问用 0.0.0.0；仅本机访问改 127.0.0.1"
+  },
+  "site_port": {
+    "description": "WebUI 端口",
+    "type": "int",
+    "default": 8765,
+    "hint": "独立于 AstrBot 面板（6185）；公网访问需在防火墙/安全组放行该端口"
+  }
+}

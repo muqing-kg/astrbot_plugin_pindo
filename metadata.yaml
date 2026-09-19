@@ -1,0 +1,8 @@
+name: astrbot_plugin_pindo
+display_name: 拼豆图纸生成器
+desc: 收图生成带色号与用量统计的拼豆图纸 PNG，支持 MARD/COCO/漫漫/盼盼/咪小窝/Hama/Perler/Artkal S 八套色板；内置 Pindo 网页版 WebUI。
+short_desc: 图片一键转拼豆图纸，附带可外部访问的 Pindo 网页版
+version: v0.1.0
+author: muqing-kg
+repo: https://github.com/muqing-kg/astrbot_plugin_pindo
+astrbot_version: ">=4.0,<5"
