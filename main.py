@@ -11,8 +11,13 @@ from pathlib import Path
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
-from astrbot.api.star import AstrBotConfig, Context, Star
+from astrbot.api.star import Context, Star
 import astrbot.api.message_components as Comp
+
+try:  # AstrBotConfig：新版在 astrbot.api，部分版本从 star 命名空间导出
+    from astrbot.api.star import AstrBotConfig
+except ImportError:
+    from astrbot.api import AstrBotConfig
 
 import pindo_core
 from pindo_core import BRAND_LABELS, BRAND_ORDER, COMMAND_RE, resolve_brand
