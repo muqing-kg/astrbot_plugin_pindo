@@ -19,9 +19,9 @@ try:  # AstrBotConfig：新版在 astrbot.api，部分版本从 star 命名空�
 except ImportError:
     from astrbot.api import AstrBotConfig
 
-import pindo_core
-from pindo_core import BRAND_LABELS, BRAND_ORDER, COMMAND_RE, resolve_brand
-from web_server import SiteServer
+from . import pindo_core
+from .pindo_core import BRAND_LABELS, BRAND_ORDER, COMMAND_RE, resolve_brand
+from .web_server import SiteServer
 
 try:
     from astrbot.core.utils.astrbot_path import get_astrbot_temp_path
